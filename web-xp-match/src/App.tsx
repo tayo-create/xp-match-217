@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -19,6 +19,7 @@ import { SharesProvider } from "@/providers/SharesProvider";
 import { SocialProvider } from "@/providers/SocialProvider";
 import { SyncProvider, useSync } from "@/providers/SyncProvider";
 import { TripsProvider } from "@/providers/TripsProvider";
+import { lazyRoute as lazy } from "@/lib/lazy-route";
 
 import AuthCallback from "./pages/AuthCallback";
 import Concierge from "./pages/Concierge";

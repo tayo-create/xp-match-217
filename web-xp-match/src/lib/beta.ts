@@ -37,7 +37,7 @@ export async function sendFeedback(input: FeedbackInput): Promise<void> {
 
 // Crash reporting: one report per distinct error per session, and never more than 10.
 const sent = new Set<string>();
-const IGNORE = [/ResizeObserver loop/i, /Script error\.?$/i, /Loading chunk .* failed/i, /AbortError/i, /NetworkError when attempting/i];
+const IGNORE = [/ResizeObserver loop/i, /Script error\.?$/i, /Loading chunk .* failed/i, /dynamically imported module/i, /Importing a module script failed/i, /Unable to preload CSS/i, /AbortError/i, /NetworkError when attempting/i];
 
 /** Reports an unexpected error. Safe to call from anywhere; it never throws. */
 export function reportCrash(error: unknown, where: string, extra?: Record<string, unknown>): void {
