@@ -1,0 +1,33 @@
+const base = "https://owovc8n3uuz2cawhtmbuc.rork.app/~assets/img";
+
+/** Generated editorial imagery used across XP Match. */
+export const IMG = {
+  onboardQuiz: `${base}/51d8dfc4-4b7b-4dea-9190-da105a8a0299.png`,
+  onboardAi: `${base}/9559ed8d-1e9d-465e-9b5b-1cb8b7d250ce.png`,
+  typeTrailblazer: `${base}/b9275e31-185c-467c-b248-6205d8270f34.png`,
+  typeArchitect: `${base}/2b8b911d-308b-4e1c-8cc8-b56f3a21d8d0.png`,
+  typeCurator: `${base}/0d9e510d-4706-49f2-89ad-36a5e4a438a7.png`,
+  typeDrifter: `${base}/9eb5574d-3e74-4678-b4ee-9c9505992240.png`,
+  avillez: `${base}/64061380-501c-43f2-b93f-456f4b52e978.png`,
+  taberna: `${base}/30daf02e-df7e-4dc8-840f-326ac526e290.png`,
+  steak: `${base}/c7a1f2ac-833b-4683-953c-9652561e534e.png`,
+  pasteis: `${base}/d757c23f-e235-4229-a35d-78211f250bd2.png`,
+  miradouro: `${base}/c7e93536-b981-4e38-87c7-0482dd2fd009.png`,
+  rooftop: `${base}/9619ebfb-e48f-4ac1-a36e-e861600a9574.png`,
+  sintra: `${base}/0c10e8f4-2995-45d1-ae4e-086b7b84d20a.png`,
+  hotel: `${base}/c35a7ab5-1921-40fb-a14b-f8d3987e17b0.png`,
+  tram: `${base}/8221e046-d55e-49ba-a1eb-ff40e513d4e3.png`,
+  porto: `${base}/895606ae-c8a2-45e1-9006-e2b708c38122.png`,
+  tokyo: `${base}/865d5012-76ce-4178-b838-22e54c925957.png`,
+  fado: `${base}/a817314f-0bcb-44a2-9e2c-6502e8ca45c1.png`,
+  gulbenkian: `${base}/9951ad7a-383b-4453-86b3-83cdced0882c.png`,
+  foodhall: `${base}/9745f5b0-6d51-48c3-ba5b-a763b26dbe38.png`,
+  winebar: `${base}/8c933361-eb7d-40fc-ba3e-4816be4b3c60.png`,
+  maya: `${base}/baef817e-5124-425a-b117-5727d1daf995.png`,
+  diego: `${base}/47d948eb-844d-47d1-8eaa-25f20e553087.png`,
+  hana: `${base}/f46419c1-126d-4312-8f44-ec858684779e.png`,
+  me: `${base}/219c784d-a56c-46bd-bb8b-f47c3e6eb0d6.png`,
+  arjun: `${base}/83916c74-d734-4a06-bed5-d9955c33f54f.png`,
+  lena: `${base}/9e0cf6a9-c72d-4d8f-9c98-4e6559b84591.png`,
+  tom: `${base}/a13528c8-ef8f-4b17-8476-de2513592e10.png`,
+} as const;
