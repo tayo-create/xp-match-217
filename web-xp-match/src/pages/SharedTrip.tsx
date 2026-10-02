@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Bus, Clock, CopyPlus, Download, Eye, Footprints, Loader2, MapPinned, PencilLine } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -11,7 +11,8 @@ import { BACKEND_PATH, readJson } from "@/lib/backend";
 import { fetchWithAuth, useAuth } from "@/providers/AuthProvider";
 import { useConcierge } from "@/providers/ConciergeProvider";
 import { useProfile } from "@/providers/ProfileProvider";
-import { legBetween } from "@/lib/geo";
+import { useViewingDay } from "@/hooks/use-viewing-day";
+import { legId, pairsFor, useLegs } from "@/lib/routing";
 import { uid } from "@/lib/persist";
 import { cn } from "@/lib/utils";
 import type { Trip } from "@/lib/types";
@@ -70,6 +71,12 @@ export default function SharedTrip() {
   const stops = useMemo<MapStop[]>(() => (trip ? chronological(trip).map(({ item, day }) => ({ id: item.id, place: item.place, time: item.time, day })) : []), [trip]);
   const mapStops = useMemo(() => (scope < 0 ? stops : stops.filter((s) => s.day === scope)), [stops, scope]);
   const numberOf = useMemo(() => Object.fromEntries(stops.map((s, i) => [s.id, i + 1])) as Record<string, number>, [stops]);
+  const pairs = useMemo(() => pairsFor(trip?.days.map((d) => d.items) ?? []), [trip]);
+  const legs = useLegs(pairs);
+  // On "Whole trip", the map follows the day being read as the page scrolls.
+  const daysRef = useRef<HTMLDivElement>(null);
+  const viewingDay = useViewingDay({ container: daysRef, enabled: scope < 0 && (trip?.days.length ?? 0) > 1, layoutKey: `${stops.length}` });
+  const focusDay = scope < 0 && viewingDay !== undefined && stops.some((s) => s.day === viewingDay) ? viewingDay : undefined;
 
   const copyToMine = () => {
     if (!trip) return;
@@ -198,10 +205,10 @@ export default function SharedTrip() {
           </div>
 
           <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_1fr]">
-            <div className="space-y-5">
+            <div ref={daysRef} className="space-y-5">
               {trip.days.map((d, i) =>
                 scope >= 0 && scope !== i ? null : (
-                  <section key={i} className="surface p-5 sm:p-6">
+                  <section key={i} data-day={i} className={cn("surface p-5 transition-shadow duration-300 sm:p-6", focusDay === i && "ring-2 ring-secondary/15")}>
                     <div className="flex items-baseline gap-3">
                       <span className="size-3 rounded-full" style={{ background: dayColor(i) }} />
                       <h2 className="text-[26px] font-semibold text-secondary">Day {i + 1}</h2>
@@ -211,7 +218,7 @@ export default function SharedTrip() {
                     <ol className="mt-3">
                       {d.items.map((it, k) => {
                         const next = d.items[k + 1];
-                        const leg = next ? legBetween(it.place, next.place) : undefined;
+                        const leg = next ? legs.get(legId(it, next)) : undefined;
                         return (
                           <li key={it.id}>
                             <button type="button" onClick={() => setActiveId(it.id)} className={cn("flex w-full items-start gap-3 rounded-xl p-2 text-left transition-colors", activeId === it.id ? "bg-muted" : "hover:bg-muted/50")}>
@@ -241,7 +248,7 @@ export default function SharedTrip() {
               )}
             </div>
             <div className="relative h-[420px] overflow-hidden rounded-xl border border-border/70 lg:sticky lg:top-24 lg:h-[calc(100vh-130px)]">
-              <TripMap stops={mapStops} center={trip.center} activeId={activeId} onSelect={setActiveId} multiDay={scope < 0} labels={scope >= 0} legs={scope >= 0} />
+              <TripMap stops={mapStops} center={trip.center} activeId={activeId} onSelect={setActiveId} multiDay={scope < 0} labels={scope >= 0} legs={scope >= 0 || focusDay !== undefined} focusDay={focusDay} />
             </div>
           </div>
 

@@ -264,8 +264,12 @@
   background: #fff;
 }
 
+/* Time + distance chip on each hop: navy pill with a day-colored mode icon. */
 .xp-leg-chip {
   position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   transform: translate(-50%, -50%);
   white-space: nowrap;
   border-radius: 9999px;
@@ -273,8 +277,35 @@
   color: hsl(40 45% 96%);
   font-size: 10.5px;
   font-weight: 600;
-  padding: 2px 7px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 7px 2px 3px;
+  border: 1.5px solid #fff;
   box-shadow: 0 4px 10px -4px rgba(31, 42, 68, 0.5);
+  animation: leg-in 0.35s ease-out both;
+}
+
+.xp-leg-chip svg {
+  width: 15px;
+  height: 15px;
+  padding: 2.5px;
+  border-radius: 9999px;
+  background: var(--leg, #c8452d);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+@keyframes leg-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Walking legs (dotted) and pending estimates fade in instead of drawing, so their dash pattern survives. */
+.xp-walk {
+  animation: leg-in 0.5s ease-out both;
 }
 
 @keyframes route-draw {
@@ -413,6 +444,8 @@
   .compat-bar,
   .recap-kb-a,
   .recap-kb-b,
+  .xp-leg-chip,
+  .xp-walk,
   .xp-route {
     animation: none;
     transition: none;

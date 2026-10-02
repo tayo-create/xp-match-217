@@ -1,5 +1,5 @@
 import { ArrowLeftRight, CalendarClock, ChevronRight, Footprints, MoreHorizontal, Sparkles, TramFront, Trash2 } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -13,7 +13,8 @@ import {
 import { dayColor } from "@/components/xp/TripMap";
 import { KIND_LABEL, placeImage } from "@/data/places";
 import type { TripPerson } from "@/hooks/use-trip-people";
-import { legBetween } from "@/lib/geo";
+import { formatKm } from "@/lib/geo";
+import { dayTotals, legId, pairsFor, useLegs, type RoutedLeg } from "@/lib/routing";
 import { cn } from "@/lib/utils";
 import type { Place, Trip } from "@/lib/types";
 import { dayDate, useTrips } from "@/providers/TripsProvider";
@@ -30,13 +31,19 @@ interface Props {
   onDayFilter: (d: "all" | number) => void;
   onOpenPlace: (place: Place) => void;
   onAsk: (text: string) => void;
+  /** The day currently scrolled into view (its header gets a subtle highlight to match the map). */
+  viewingDay?: number;
 }
 
+const durationText = (minutes: number): string => (minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60 ? `${minutes % 60} min` : ""}`.trim());
+
 /** The trip's itinerary inside the chat: tap a stop to see it on the map, swap it, move it, or drop it. */
-export function ItineraryEditor({ trip, people, fresh, numbers, dayFilter, onDayFilter, onOpenPlace, onAsk }: Props) {
+export function ItineraryEditor({ trip, people, fresh, numbers, dayFilter, onDayFilter, onOpenPlace, onAsk, viewingDay }: Props) {
   const { removeItem, addToTrip, moveItem } = useTrips();
   const [swapping, setSwapping] = useState<string | undefined>(undefined);
   const days = trip.days.map((d, i) => ({ d, i })).filter(({ i }) => dayFilter === "all" || dayFilter === i);
+  const pairs = useMemo(() => pairsFor(trip.days.map((d) => d.items)), [trip.days]);
+  const legs = useLegs(pairs);
 
   const remove = (day: number, itemId: string) => {
     const item = trip.days[day]?.items.find((x) => x.id === itemId);
@@ -78,15 +85,27 @@ export function ItineraryEditor({ trip, people, fresh, numbers, dayFilter, onDay
       </div>
 
       <div className="mt-3 space-y-5">
-        {days.map(({ d, i }) => (
-          <section key={i} aria-label={`Day ${i + 1}`}>
-            <header className="flex items-baseline gap-2">
-              <span className="size-2.5 shrink-0 self-center rounded-full" style={{ background: dayColor(i) }} />
-              <h4 className="font-display text-[19px] font-semibold leading-none text-secondary">Day {i + 1}</h4>
-              <span className="text-[12.5px] text-muted-foreground">{dayDate(trip, i).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
-              <button type="button" onClick={() => onAsk(`Plan more for day ${i + 1} of my ${trip.city} trip`)} className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-semibold text-primary hover:bg-accent">
-                <Sparkles className="size-3" /> {d.items.length ? "Add more" : "Fill this day"}
-              </button>
+        {days.map(({ d, i }) => {
+          const dayLegs = d.items.slice(1).map((it, j) => legs.get(legId(d.items[j], it))).filter((l): l is RoutedLeg => Boolean(l));
+          const totals = dayTotals(dayLegs);
+          const viewing = viewingDay === i;
+          return (
+          <section key={i} data-day={i} aria-label={`Day ${i + 1}`}>
+            <header className={cn("-mx-2 rounded-lg px-2 py-1 transition-colors duration-300", viewing && "bg-muted/70")}>
+              <div className="flex items-baseline gap-2">
+                <span className={cn("size-2.5 shrink-0 self-center rounded-full transition-transform duration-300", viewing && "scale-125")} style={{ background: dayColor(i) }} />
+                <h4 className="font-display text-[19px] font-semibold leading-none text-secondary">Day {i + 1}</h4>
+                <span className="text-[12.5px] text-muted-foreground">{dayDate(trip, i).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
+                <button type="button" onClick={() => onAsk(`Plan more for day ${i + 1} of my ${trip.city} trip`)} className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-semibold text-primary hover:bg-accent">
+                  <Sparkles className="size-3" /> {d.items.length ? "Add more" : "Fill this day"}
+                </button>
+              </div>
+              {dayLegs.length ? (
+                <p className="mt-1 pl-[18px] text-[11.5px] tabular-nums text-muted-foreground">
+                  {formatKm(totals.km)} between stops · about {durationText(totals.minutes)} getting around
+                  {totals.walkKm > 0.05 ? ` · ${formatKm(totals.walkKm)} on foot` : ""}
+                </p>
+              ) : null}
             </header>
 
             {d.items.length === 0 ? (
@@ -95,7 +114,7 @@ export function ItineraryEditor({ trip, people, fresh, numbers, dayFilter, onDay
               <ol className="mt-2">
                 {d.items.map((it, j) => {
                   const next = d.items[j + 1];
-                  const leg = next ? legBetween(it.place, next.place) : undefined;
+                  const leg = next ? legs.get(legId(it, next)) : undefined;
                   const isFresh = fresh.has(it.id);
                   return (
                     <Fragment key={it.id}>
@@ -164,7 +183,10 @@ export function ItineraryEditor({ trip, people, fresh, numbers, dayFilter, onDay
                         <li className="flex list-none items-center gap-2 py-1.5 pl-6 text-[11.5px] text-muted-foreground" aria-label={leg.label}>
                           <span className="h-4 border-l-2 border-dotted" style={{ borderColor: dayColor(i) }} />
                           {leg.mode === "walk" ? <Footprints className="size-3" /> : <TramFront className="size-3" />}
-                          {leg.minutes} min {leg.mode === "walk" ? "walk" : "ride"}
+                          <span className="tabular-nums">
+                            {leg.routed || leg.mode === "ride" ? "" : "~"}
+                            {leg.minutes} min {leg.mode === "walk" ? "walk" : "by tram or taxi"} · {formatKm(leg.km)}
+                          </span>
                         </li>
                       ) : (
                         <li className="h-2 list-none" aria-hidden />
@@ -175,7 +197,8 @@ export function ItineraryEditor({ trip, people, fresh, numbers, dayFilter, onDay
               </ol>
             )}
           </section>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

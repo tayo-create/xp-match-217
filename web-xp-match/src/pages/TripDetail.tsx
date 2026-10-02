@@ -19,7 +19,7 @@ import { useList } from "@/providers/ListProvider";
 import { TripMap, type MapStop } from "@/components/xp/TripMap";
 import { KIND_LABEL, placeImage } from "@/data/places";
 import { useCityPlaces } from "@/hooks/use-city-places";
-import { legBetween } from "@/lib/geo";
+import { dayTotals as sumLegs, legId, pairsFor, useLegs, type RoutedLeg } from "@/lib/routing";
 import { matchPlace, rankPlaces } from "@/lib/match";
 import { uid } from "@/lib/persist";
 import { cn } from "@/lib/utils";
@@ -54,16 +54,9 @@ export default function TripDetail() {
   const safeDay = trip ? Math.min(day, trip.days.length - 1) : 0;
   const items = useMemo(() => trip?.days[safeDay]?.items ?? [], [trip, safeDay]);
   const stops = useMemo<MapStop[]>(() => items.map((it) => ({ id: it.id, place: it.place, time: it.time, day: safeDay })), [items, safeDay]);
-  const dayTotals = useMemo(() => {
-    let km = 0;
-    let minutes = 0;
-    for (let i = 1; i < items.length; i++) {
-      const leg = legBetween(items[i - 1].place, items[i].place);
-      km += leg.km;
-      minutes += leg.minutes;
-    }
-    return { km, minutes };
-  }, [items]);
+  const pairs = useMemo(() => pairsFor([items]), [items]);
+  const legs = useLegs(pairs);
+  const dayTotals = useMemo(() => sumLegs(pairs.map((p) => legs.get(p.id)).filter((l): l is RoutedLeg => Boolean(l))), [pairs, legs]);
   const linkedChat = useMemo(() => chats.find((c) => c.tripId === id), [chats, id]);
 
   /** Places in this trip also saved by a high-match traveler. */
@@ -222,7 +215,7 @@ export default function TripDetail() {
                 const m = matchPlace(profile, it.place);
                 const saved = isSaved(it.place.id);
                 const next = items[idx + 1];
-                const leg = next ? legBetween(it.place, next.place) : undefined;
+                const leg = next ? legs.get(legId(it, next)) : undefined;
                 return (
                   <li key={it.id}>
                   <div

@@ -1,11 +1,12 @@
 import { ArrowUpRight, Map as MapIcon, Plus, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { BlendDonut, BlendLegend } from "@/components/xp/BlendDonut";
 import { TripMap, dayColor, type MapStop } from "@/components/xp/TripMap";
 import { CITIES, KIND_LABEL, placeImage } from "@/data/places";
 import { useCityPlaces } from "@/hooks/use-city-places";
+import { useViewingDay } from "@/hooks/use-viewing-day";
 import { sameCity } from "@/lib/livePlaces";
 import { scoreForPeople, useTripPeople } from "@/hooks/use-trip-people";
 import { cn } from "@/lib/utils";
@@ -87,6 +88,18 @@ export function ChatSidePanel({ chat, view, onView, dayFilter, onDayFilter, onAs
 
   const activeId = focused ? (focusedStop ? focusedStop.item.id : `pick:${focused.id}`) : undefined;
 
+  // As the itinerary scrolls, the map follows the day being read.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const viewingDay = useViewingDay({
+    scrollRoot: scrollRef,
+    container: listRef,
+    enabled: Boolean(trip) && !focused && dayFilter === "all" && (trip?.days.length ?? 0) > 1,
+    layoutKey: `${stops.map((s) => s.id).join(",")}|${fresh.size}|${suggested.length}`,
+  });
+  const focusDay = dayFilter === "all" && viewingDay !== undefined && stops.some((s) => s.day === viewingDay) ? viewingDay : undefined;
+  const focusDayCount = focusDay === undefined ? 0 : stops.filter((s) => s.day === focusDay).length;
+
   // A stop on another day than the filter? Widen the map so its pin is visible.
   useEffect(() => {
     if (focusedStop && dayFilter !== "all" && dayFilter !== focusedStop.day) onDayFilter(focusedStop.day);
@@ -139,13 +152,18 @@ export function ChatSidePanel({ chat, view, onView, dayFilter, onDayFilter, onAs
             compact
             extras={extras}
             numbers={numbers}
+            legs={dayFilter !== "all" || focusDay !== undefined}
+            focusDay={focusDay}
             focus={focused ? [focused.lat, focused.lng] : undefined}
             focusKey={view.kind === "place" ? `${view.place.id}-${view.nonce}` : undefined}
           />
           <div className="pointer-events-none absolute bottom-2 left-2 z-[400] flex flex-wrap gap-1.5">
             {stopCount ? (
-              <span className="rounded-full bg-card/95 px-2.5 py-1 text-[11px] font-semibold text-secondary shadow-sm">
-                {dayFilter === "all" ? "All days" : `Day ${dayFilter + 1}`} · {mapStops.length} planned
+              <span key={focusDay ?? "x"} className="inline-flex items-center gap-1.5 rounded-full bg-card/95 px-2.5 py-1 text-[11px] font-semibold text-secondary shadow-sm animate-rise">
+                {focusDay !== undefined || dayFilter !== "all" ? <span className="size-2 rounded-full" style={{ background: dayColor(focusDay ?? (dayFilter as number)) }} /> : null}
+                {focusDay !== undefined
+                  ? `Viewing Day ${focusDay + 1} · ${focusDayCount} ${focusDayCount === 1 ? "stop" : "stops"}`
+                  : `${dayFilter === "all" ? "All days" : `Day ${dayFilter + 1}`} · ${mapStops.length} planned`}
               </span>
             ) : null}
             {extras.length ? (
@@ -160,7 +178,7 @@ export function ChatSidePanel({ chat, view, onView, dayFilter, onDayFilter, onAs
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-4 scrollbar-thin">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-4 scrollbar-thin">
         {focused ? (
           <PlaceDetail
             place={focused}
@@ -189,7 +207,9 @@ export function ChatSidePanel({ chat, view, onView, dayFilter, onDayFilter, onAs
               </div>
             ) : null}
 
-            <ItineraryEditor trip={trip} people={people} fresh={fresh} numbers={numbers} dayFilter={dayFilter} onDayFilter={onDayFilter} onOpenPlace={open} onAsk={onAsk} />
+            <div ref={listRef}>
+              <ItineraryEditor trip={trip} people={people} fresh={fresh} numbers={numbers} dayFilter={dayFilter} onDayFilter={onDayFilter} onOpenPlace={open} onAsk={onAsk} viewingDay={focusDay} />
+            </div>
 
             {suggested.length ? (
               <section className="mt-7 border-t border-border pt-5" aria-label="Suggested, not planned yet">
