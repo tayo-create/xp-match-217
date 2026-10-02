@@ -1,7 +1,7 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
-import { memo, useEffect, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
 
 import { legBetween } from "@/lib/geo";
@@ -35,6 +35,15 @@ const pinIcon = (n: number, color: string, active: boolean, fresh: boolean, smal
   });
 };
 
+/** Suggested (not yet planned) picks: a hollow navy ring with a terracotta core. */
+const suggestIcon = (active: boolean): L.DivIcon =>
+  L.divIcon({
+    className: "xp-pin",
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    html: `<div class="xp-suggest${active ? " is-active" : ""}"><span></span></div>`,
+  });
+
 const legIcon = (label: string): L.DivIcon =>
   L.divIcon({ className: "xp-leg", iconSize: [0, 0], html: `<span class="xp-leg-chip">${label}</span>` });
 
@@ -62,6 +71,22 @@ function AutoResize() {
   return null;
 }
 
+/** Flies to a chosen place whenever `focusKey` changes (e.g. a pick was tapped in the chat). */
+function FlyTo({ pos, focusKey }: { pos?: [number, number]; focusKey?: string }) {
+  const map = useMap();
+  const posRef = useRef<[number, number] | undefined>(pos);
+  posRef.current = pos;
+  useEffect(() => {
+    const p = posRef.current;
+    if (!focusKey || !p) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Let FitBounds settle first when the stop list changed in the same render.
+    const t = window.setTimeout(() => map.flyTo(p, Math.max(map.getZoom(), 15), { animate: !still, duration: 0.7 }), 60);
+    return () => window.clearTimeout(t);
+  }, [map, focusKey]);
+  return null;
+}
+
 function PanTo({ stop }: { stop?: MapStop }) {
   const map = useMap();
   useEffect(() => {
@@ -85,6 +110,13 @@ interface Props {
   /** Walking/ride estimates at the middle of each hop. */
   legs?: boolean;
   compact?: boolean;
+  /** Places shown as unnumbered "suggested" pins (picks not on the itinerary yet). Selected as `pick:<placeId>`. */
+  extras?: Place[];
+  /** Overrides the pin number per stop id (keeps numbers stable when the list is filtered). */
+  numbers?: Record<string, number>;
+  /** Fly to this position whenever `focusKey` changes. */
+  focus?: [number, number];
+  focusKey?: string;
 }
 
 /**
@@ -92,8 +124,25 @@ interface Props {
  * Single-day mode draws one terracotta route; multi-day mode colors each day and
  * joins consecutive days with a faint dashed hop.
  */
-export const TripMap = memo(function TripMap({ stops, center, activeId, onSelect, freshIds, multiDay = false, labels = true, legs = false, compact = false }: Props) {
-  const points = useMemo<[number, number][]>(() => stops.map((s) => [s.place.lat, s.place.lng]), [stops]);
+export const TripMap = memo(function TripMap({
+  stops,
+  center,
+  activeId,
+  onSelect,
+  freshIds,
+  multiDay = false,
+  labels = true,
+  legs = false,
+  compact = false,
+  extras,
+  numbers,
+  focus,
+  focusKey,
+}: Props) {
+  const points = useMemo<[number, number][]>(
+    () => [...stops.map((s) => [s.place.lat, s.place.lng] as [number, number]), ...(extras ?? []).map((p) => [p.lat, p.lng] as [number, number])],
+    [stops, extras],
+  );
 
   const routes = useMemo(() => {
     const byDay: { day: number; pts: [number, number][] }[] = [];
@@ -131,6 +180,7 @@ export const TripMap = memo(function TripMap({ stops, center, activeId, onSelect
       <AutoResize />
       <FitBounds points={points} center={center} padding={compact ? 28 : 56} />
       <PanTo stop={active} />
+      <FlyTo pos={focus} focusKey={focusKey} />
       {routes.bridges.map((pts, i) => (
         <Polyline key={`b${i}`} positions={pts} pathOptions={{ color: "#1F2A44", weight: 2, opacity: 0.35, dashArray: "2 7", lineCap: "round" }} />
       ))}
@@ -151,14 +201,24 @@ export const TripMap = memo(function TripMap({ stops, center, activeId, onSelect
       {legMarkers.map((l) => (
         <Marker key={l.id} position={l.pos} icon={legIcon(l.label)} interactive={false} keyboard={false} />
       ))}
+      {(extras ?? []).map((p) => {
+        const id = `pick:${p.id}`;
+        return (
+          <Marker key={id} position={[p.lat, p.lng]} icon={suggestIcon(id === activeId)} zIndexOffset={id === activeId ? 1000 : -100} eventHandlers={{ click: () => onSelect?.(id) }} title={`Suggested: ${p.name}`}>
+            <Tooltip direction="right" offset={[12, 0]} className="xp-tip">
+              Suggested · {p.name}
+            </Tooltip>
+          </Marker>
+        );
+      })}
       {stops.map((s, i) => (
         <Marker
           key={s.id}
           position={[s.place.lat, s.place.lng]}
-          icon={pinIcon(i + 1, multiDay ? dayColor(s.day) : "#C8452D", s.id === activeId, freshIds?.has(s.id) ?? false, compact)}
+          icon={pinIcon(numbers?.[s.id] ?? i + 1, multiDay ? dayColor(s.day) : "#C8452D", s.id === activeId, freshIds?.has(s.id) ?? false, compact)}
           zIndexOffset={s.id === activeId ? 1000 : freshIds?.has(s.id) ? 500 : 0}
           eventHandlers={{ click: () => onSelect?.(s.id) }}
-          title={`${i + 1}. ${s.place.name}`}
+          title={`${numbers?.[s.id] ?? i + 1}. ${s.place.name}`}
         >
           <Tooltip direction="right" offset={[compact ? 12 : 14, compact ? -18 : -24]} permanent={labels} className="xp-tip">
             {multiDay ? `Day ${s.day + 1} · ` : ""}

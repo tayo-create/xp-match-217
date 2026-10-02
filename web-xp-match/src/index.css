@@ -235,6 +235,35 @@
   border: none;
 }
 
+/* Suggested (not yet planned) picks on the chat map: white ring, terracotta core. */
+.xp-suggest {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2.5px solid #1f2a44;
+  box-shadow: 0 4px 8px -3px rgba(31, 42, 68, 0.45);
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.xp-suggest span {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #c8452d;
+}
+
+.xp-suggest.is-active {
+  background: #1f2a44;
+  transform: scale(1.3);
+}
+
+.xp-suggest.is-active span {
+  background: #fff;
+}
+
 .xp-leg-chip {
   position: absolute;
   transform: translate(-50%, -50%);

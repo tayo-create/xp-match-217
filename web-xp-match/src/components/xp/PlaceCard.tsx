@@ -1,4 +1,4 @@
-import { Bookmark, Star } from "lucide-react";
+import { Bookmark, MapPin, Star } from "lucide-react";
 import { memo, useMemo } from "react";
 import { Link } from "react-router-dom";
 
@@ -23,10 +23,14 @@ interface Props {
   className?: string;
   /** When there are 2+ people, shows the group score with each person's bar. */
   people?: TripPerson[];
+  /** Opens the place in the chat's side map. Makes the photo and name clickable. */
+  onOpen?: (place: Place) => void;
+  /** Highlights the card while its place is open in the side map. */
+  active?: boolean;
 }
 
 /** Editorial pick card with photo, match badge, meta, and trip actions. */
-export const PlaceCard = memo(function PlaceCard({ place, tripId, index = 0, className, people }: Props) {
+export const PlaceCard = memo(function PlaceCard({ place, tripId, index = 0, className, people, onOpen, active }: Props) {
   const { profile } = useProfile();
   const { isSaved, toggleSaved } = useTrips();
   const { stats } = useReviews();
@@ -39,7 +43,11 @@ export const PlaceCard = memo(function PlaceCard({ place, tripId, index = 0, cla
 
   return (
     <article
-      className={cn("surface group flex flex-col overflow-hidden transition-shadow hover:shadow-[0_18px_40px_-20px_hsl(222_37%_19%/0.35)] animate-rise", className)}
+      className={cn(
+        "surface group flex flex-col overflow-hidden transition-shadow hover:shadow-[0_18px_40px_-20px_hsl(222_37%_19%/0.35)] animate-rise",
+        active && "ring-2 ring-secondary ring-offset-2 ring-offset-background",
+        className,
+      )}
       style={{ animationDelay: `${index * 90}ms` }}
     >
       <div className="relative aspect-[16/10] overflow-hidden bg-muted">
@@ -49,6 +57,13 @@ export const PlaceCard = memo(function PlaceCard({ place, tripId, index = 0, cla
           loading="lazy"
           className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
         />
+        {onOpen ? (
+          <button type="button" onClick={() => onOpen(place)} aria-label={`Show ${place.name} on the map`} className="absolute inset-0 cursor-pointer">
+            <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-card/95 px-2.5 py-1 text-[12px] font-semibold text-secondary shadow-sm transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
+              <MapPin className="size-3.5 text-primary" /> {active ? "On the map" : "View on map"}
+            </span>
+          </button>
+        ) : null}
         {group ? (
           <div className="absolute right-3 top-3 flex items-center gap-1.5">
             <WhyBadge scores={group} />
@@ -61,7 +76,15 @@ export const PlaceCard = memo(function PlaceCard({ place, tripId, index = 0, cla
         )}
       </div>
       <div className="flex flex-1 flex-col p-4">
-        <h3 className="font-sans text-[17px] font-semibold leading-snug tracking-tight">{place.name}</h3>
+        <h3 className="font-sans text-[17px] font-semibold leading-snug tracking-tight">
+          {onOpen ? (
+            <button type="button" onClick={() => onOpen(place)} className="text-left underline-offset-2 hover:text-primary hover:underline">
+              {place.name}
+            </button>
+          ) : (
+            place.name
+          )}
+        </h3>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
           {[place.cuisine ?? place.kind.charAt(0).toUpperCase() + place.kind.slice(1), place.neighborhood, priceLabel(place.price)].join(" · ")}
         </p>

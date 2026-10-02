@@ -146,6 +146,27 @@ export const [TripsProvider, useTrips] = createContextHook(() => {
     [setTrips],
   );
 
+  /** Swaps the place on an existing stop, keeping its day and time slot. */
+  const replaceItem = useCallback(
+    (tripId: string, dayIndex: number, itemId: string, place: Place) => {
+      setTrips((prev) =>
+        prev.map((t) =>
+          t.id !== tripId
+            ? t
+            : {
+                ...t,
+                days: t.days.map((d, i) =>
+                  i === dayIndex
+                    ? { items: d.items.map((x) => (x.id === itemId ? { ...x, place, note: undefined, addedAt: Date.now(), addedBy: me.label, addedById: me.id } : x)) }
+                    : d,
+                ),
+              },
+        ),
+      );
+    },
+    [setTrips, me],
+  );
+
   const updateItemTime = useCallback(
     (tripId: string, dayIndex: number, itemId: string, time: string) => {
       setTrips((prev) =>
@@ -254,6 +275,7 @@ export const [TripsProvider, useTrips] = createContextHook(() => {
     me,
     addToTrip,
     removeItem,
+    replaceItem,
     updateItemTime,
     moveItem,
     placeMany,
