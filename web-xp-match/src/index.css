@@ -122,6 +122,20 @@
   }
 }
 
+/* Crossfade of the side menu's contents when it expands or collapses. */
+@keyframes sidebar-fade {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.sidebar-fade {
+  animation: sidebar-fade 220ms ease-out both;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -357,6 +371,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .sidebar-fade,
   .animate-rise,
   .animate-grow-x,
   .typing-dot,

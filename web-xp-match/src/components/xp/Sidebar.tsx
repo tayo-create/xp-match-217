@@ -280,8 +280,13 @@ export function Sidebar({ collapsed = false, onToggleCollapsed, onNavigate }: Si
                 aria-label={label}
                 className={({ isActive }) => cn("relative grid size-11 place-items-center rounded-xl transition-colors", isActive ? "bg-secondary text-secondary-foreground" : "text-foreground/75 hover:bg-muted")}
               >
-                <Icon className="size-5" />
-                {hot && badge ? <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary ring-2 ring-[hsl(var(--sidebar-background))]" /> : null}
+                {({ isActive }) => (
+                  <>
+                    {isActive ? <span aria-hidden className="absolute -left-[5px] top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full bg-primary" /> : null}
+                    <Icon className="size-5" />
+                    {hot && badge ? <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary ring-2 ring-[hsl(var(--sidebar-background))]" /> : null}
+                  </>
+                )}
               </NavLink>
             </TooltipTrigger>
             <TooltipContent side="right">{label}</TooltipContent>
@@ -422,8 +427,9 @@ export function Sidebar({ collapsed = false, onToggleCollapsed, onNavigate }: Si
           >
             {({ isActive }) => (
               <>
+                {isActive ? <span aria-hidden className="absolute left-0 top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" /> : null}
                 <Icon className="size-[18px]" />
-                <span className="max-w-full truncate px-0.5">{label}</span>
+                <span className={cn("max-w-full truncate px-0.5", isActive && "font-semibold")}>{label}</span>
                 {badge ? (
                   <span
                     className={cn(

@@ -11,10 +11,25 @@ export { Wordmark };
 
 /** App frame: a persistent, expanded left side menu from tablet/desktop widths up, and a slide-in drawer on phones. */
 export function AppShell() {
-  const [collapsed, setCollapsed] = useState<boolean>(false);
+  // Device-level layout preference: kept across refreshes, not account data, so it stays out of STORAGE_KEYS.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("xp.sidebar.collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [drawer, setDrawer] = useState<boolean>(false);
   const { unreadTotal } = useSocial();
   const location = useLocation();
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("xp.sidebar.collapsed", collapsed ? "1" : "0");
+    } catch {
+      // Storage may be unavailable (private mode); the expanded default still works.
+    }
+  }, [collapsed]);
 
   useEffect(() => {
     setDrawer(false);
@@ -24,12 +39,14 @@ export function AppShell() {
     <div className="min-h-screen">
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden border-r border-border/70 bg-[hsl(var(--sidebar-background))] transition-[width] duration-300 ease-out md:block",
+          "fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-background))] transition-[width] duration-300 ease-out md:block",
           collapsed ? "w-[76px]" : "w-[288px] lg:w-[320px]",
         )}
         aria-label="Side menu"
       >
-        <Sidebar collapsed={collapsed} onToggleCollapsed={() => setCollapsed((v) => !v)} />
+        <div key={collapsed ? "rail" : "menu"} className="sidebar-fade h-full">
+          <Sidebar collapsed={collapsed} onToggleCollapsed={() => setCollapsed((v) => !v)} />
+        </div>
       </aside>
 
       <header className="sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-md md:hidden">
