@@ -17,7 +17,8 @@ import { TripRecap } from "@/components/xp/TripRecap";
 import { type RecapData, recapFromTrip } from "@/lib/recap";
 import { useList } from "@/providers/ListProvider";
 import { TripMap, type MapStop } from "@/components/xp/TripMap";
-import { KIND_LABEL, PLACES, placeImage } from "@/data/places";
+import { KIND_LABEL, placeImage } from "@/data/places";
+import { useCityPlaces } from "@/hooks/use-city-places";
 import { legBetween } from "@/lib/geo";
 import { matchPlace, rankPlaces } from "@/lib/match";
 import { uid } from "@/lib/persist";
@@ -349,11 +350,14 @@ function CustomStopDialog({ open, onOpenChange, tripId, city, center, dayIndex }
   const [time, setTime] = useState<string>("18:00");
   const [note, setNote] = useState<string>("");
 
+  const { places: cityPlaces, isLoading: placesLoading } = useCityPlaces(open ? city : undefined);
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const pool = PLACES.filter((p) => p.city === city && (!q || p.name.toLowerCase().includes(q) || p.neighborhood.toLowerCase().includes(q) || p.tags.some((t) => t.includes(q))));
-    return rankPlaces(profile, pool).slice(0, 5);
-  }, [query, city, profile]);
+    const pool = cityPlaces.filter(
+      (p) => !q || p.name.toLowerCase().includes(q) || p.neighborhood.toLowerCase().includes(q) || (p.cuisine ?? "").toLowerCase().includes(q) || p.tags.some((t) => t.includes(q)),
+    );
+    return rankPlaces(profile, pool).slice(0, 6);
+  }, [query, cityPlaces, profile]);
 
   const addCatalog = (p: Place) => {
     addToTrip(tripId, dayIndex, p, time);
@@ -391,7 +395,7 @@ function CustomStopDialog({ open, onOpenChange, tripId, city, center, dayIndex }
       <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-display text-3xl font-semibold text-secondary">Add a stop to Day {dayIndex + 1}</DialogTitle>
-          <DialogDescription>Search our {city} picks, or add your own place.</DialogDescription>
+          <DialogDescription>{placesLoading ? `Finding places around ${city}…` : `Search ${cityPlaces.length} places in ${city}, or add your own.`}</DialogDescription>
         </DialogHeader>
         <label className="block">
           <span className="text-sm font-medium">Time</span>

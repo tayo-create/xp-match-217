@@ -14,7 +14,6 @@ import type { Place } from "@/lib/types";
 import { useList } from "@/providers/ListProvider";
 import { useProfile } from "@/providers/ProfileProvider";
 import { useReviews } from "@/providers/ReviewsProvider";
-import { useTrips } from "@/providers/TripsProvider";
 
 interface Props {
   place: Place;
@@ -32,13 +31,12 @@ interface Props {
 /** Editorial pick card with photo, match badge, meta, and trip actions. */
 export const PlaceCard = memo(function PlaceCard({ place, tripId, index = 0, className, people, onOpen, active }: Props) {
   const { profile } = useProfile();
-  const { isSaved, toggleSaved } = useTrips();
   const { stats } = useReviews();
   const match = useMemo(() => matchPlace(profile, place), [profile, place]);
   const group = useMemo(() => (people && people.length > 1 ? scoreForPeople(people, place) : undefined), [people, place]);
-  const { openRate, logFor } = useList();
+  const { openRate, logFor, isWant, toggleWant } = useList();
   const s = stats(place.id);
-  const saved = isSaved(place.id);
+  const saved = isWant(place.id);
   const mine = logFor(place.id);
 
   return (
@@ -99,7 +97,7 @@ export const PlaceCard = memo(function PlaceCard({ place, tripId, index = 0, cla
           <AddToTripButton place={place} preferredTripId={tripId} size="sm" />
           <button
             type="button"
-            onClick={() => toggleSaved(place.id)}
+            onClick={() => toggleWant(place)}
             aria-pressed={saved}
             aria-label={saved ? `Unsave ${place.name}` : `Save ${place.name}`}
             className={cn(

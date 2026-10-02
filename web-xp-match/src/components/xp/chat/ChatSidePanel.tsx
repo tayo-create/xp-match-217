@@ -5,6 +5,8 @@ import { Link } from "react-router-dom";
 import { BlendDonut, BlendLegend } from "@/components/xp/BlendDonut";
 import { TripMap, dayColor, type MapStop } from "@/components/xp/TripMap";
 import { CITIES, KIND_LABEL, placeImage } from "@/data/places";
+import { useCityPlaces } from "@/hooks/use-city-places";
+import { sameCity } from "@/lib/livePlaces";
 import { scoreForPeople, useTripPeople } from "@/hooks/use-trip-people";
 import { cn } from "@/lib/utils";
 import type { ConciergeChat, Place } from "@/lib/types";
@@ -38,6 +40,8 @@ export function ChatSidePanel({ chat, view, onView, dayFilter, onDayFilter, onAs
   const { markSeen } = useConcierge();
   const people = useTripPeople(chat);
   const trip = tripById(chat?.tripId);
+  // Warms the city's places (so Swap is instant) and fixes up new-city trips with their real map spot.
+  useCityPlaces(trip?.city, trip);
 
   const fresh = useMemo(() => freshItemIds(trip, chat?.seenAt, me.id), [trip, chat?.seenAt, me.id]);
   const stops = useMemo<MapStop[]>(() => (trip ? chronological(trip).map(({ item, day }) => ({ id: item.id, place: item.place, time: item.time, day })) : []), [trip]);
@@ -50,7 +54,7 @@ export function ChatSidePanel({ chat, view, onView, dayFilter, onDayFilter, onAs
     const out: Place[] = [];
     [...(chat?.messages ?? [])].reverse().forEach((m) =>
       m.picks?.forEach((p) => {
-        if (seen.has(p.id) || planned.has(p.id) || (trip && p.city !== trip.city)) return;
+        if (seen.has(p.id) || planned.has(p.id) || (trip && !sameCity(p.city, trip.city))) return;
         seen.add(p.id);
         out.push(p);
       }),
@@ -76,8 +80,9 @@ export function ChatSidePanel({ chat, view, onView, dayFilter, onDayFilter, onAs
   const mapStops = useMemo(() => (dayFilter === "all" ? stops : stops.filter((s) => s.day === dayFilter)), [stops, dayFilter]);
   const center = useMemo<[number, number]>(() => {
     if (trip) return trip.center;
-    const city = CITIES.find((c) => c.name === (focused ?? suggested[0])?.city);
-    return city?.center ?? CITIES[0].center;
+    const first = focused ?? suggested[0];
+    const city = CITIES.find((c) => sameCity(c.name, first?.city ?? ""));
+    return city?.center ?? (first ? [first.lat, first.lng] : CITIES[0].center);
   }, [trip, focused, suggested]);
 
   const activeId = focused ? (focusedStop ? focusedStop.item.id : `pick:${focused.id}`) : undefined;

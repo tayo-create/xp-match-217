@@ -232,7 +232,8 @@ export const [ListProvider, useList] = createContextHook(() => {
   const isWant = useCallback((id: string) => savedIds.includes(id) || wantPlaces.some((w) => w.id === id), [savedIds, wantPlaces]);
   const toggleWant = useCallback(
     (place: Place) => {
-      if (!place.custom) return toggleSaved(place.id);
+      // Hand-picked places are saved by id; live and custom places are stored whole so they survive anywhere.
+      if (!place.custom && !place.source) return toggleSaved(place.id);
       setWantPlaces((prev) => (prev.some((w) => w.id === place.id) ? prev.filter((w) => w.id !== place.id) : [place, ...prev]));
     },
     [toggleSaved, setWantPlaces],

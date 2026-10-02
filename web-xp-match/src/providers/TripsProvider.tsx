@@ -3,6 +3,7 @@ import { useCallback, useMemo } from "react";
 
 import { CITIES } from "@/data/places";
 import { getClientId } from "@/lib/backend";
+import { IMG } from "@/lib/images";
 import { uid, usePersistentState } from "@/lib/persist";
 import type { Place, Trip } from "@/lib/types";
 import { useAuth } from "@/providers/AuthProvider";
@@ -73,20 +74,23 @@ export const [TripsProvider, useTrips] = createContextHook(() => {
     [trips],
   );
 
+  /** Creates a trip. New cities get a neutral cover until `meta` (or the places lookup) fills in the real one. */
   const createTrip = useCallback(
-    (city: string, startDate: string, endDate: string): Trip => {
+    (city: string, startDate: string, endDate: string, meta?: Partial<Pick<Trip, "country" | "center" | "cover" | "blurb" | "located">>): Trip => {
       const known = CITIES.find((c) => c.name.toLowerCase() === city.trim().toLowerCase());
       const n = dayCount(startDate, endDate);
+      const name = known?.name ?? city.trim().replace(/^\p{Ll}/u, (c) => c.toUpperCase());
       const trip: Trip = {
         id: uid("trip"),
-        city: known?.name ?? city.trim(),
+        city: name,
         country: known?.country ?? "",
         startDate,
         endDate,
-        cover: known?.cover ?? CITIES[0].cover,
-        blurb: known?.blurb ?? `Your ${city.trim()} trip, matched to your taste. Ask the concierge to fill it in.`,
+        cover: known?.cover ?? IMG.genCity,
+        blurb: known?.blurb ?? `Your ${name} trip, matched to your taste. Ask the concierge to fill it in.`,
         center: known?.center ?? CITIES[0].center,
         days: Array.from({ length: n }, () => ({ items: [] })),
+        ...(known ? {} : meta),
       };
       setTrips((prev) => [trip, ...prev]);
       return trip;
@@ -95,6 +99,12 @@ export const [TripsProvider, useTrips] = createContextHook(() => {
   );
 
   const deleteTrip = useCallback((id: string) => setTrips((prev) => prev.filter((t) => t.id !== id)), [setTrips]);
+
+  /** Updates a trip's details (not its days). */
+  const patchTrip = useCallback(
+    (id: string, patch: Partial<Omit<Trip, "id" | "days">>) => setTrips((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t))),
+    [setTrips],
+  );
 
   /** Inserts or replaces a whole trip (used by live collaboration and "copy to my trips"). */
   const upsertTrip = useCallback(
@@ -272,6 +282,7 @@ export const [TripsProvider, useTrips] = createContextHook(() => {
     createTrip,
     deleteTrip,
     upsertTrip,
+    patchTrip,
     me,
     addToTrip,
     removeItem,

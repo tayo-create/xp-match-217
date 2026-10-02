@@ -1,13 +1,14 @@
 import createContextHook from "@nkzw/create-context-hook";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { DEFAULT_SETTINGS, INTEREST_BY_ID, PACES, applyTripSettings, paceCap } from "@/data/interests";
-import { CITIES, KIND_LABEL, PLACES, PLACE_BY_ID } from "@/data/places";
+import { CITIES, KIND_LABEL } from "@/data/places";
 import { TRAVELER_TYPES, tagLabel } from "@/data/travelerTypes";
 import { chatJson } from "@/lib/ai";
 import { randomId } from "@/lib/backend";
-import { blendLabel, groupScore, rankPlaces, scorePlace, sortedTypes } from "@/lib/match";
+import { type CityPlaces, cityPlacesQuery, curatedFor, guessCities, sameCity } from "@/lib/livePlaces";
+import { blendLabel, groupScore, scorePlace, sortedTypes } from "@/lib/match";
 import { uid, usePersistentState } from "@/lib/persist";
 import type { ChatPickMessage, ConciergeChat, Place, PlaceKind, PlannedUpdate, TasteProfile, Trip, TripSettings } from "@/lib/types";
 import { useAuth } from "@/providers/AuthProvider";
@@ -55,12 +56,53 @@ export const findCity = (text: string): string | undefined =>
 const detectKinds = (text: string): PlaceKind[] => {
   const t = text.toLowerCase();
   const kinds: PlaceKind[] = [];
-  if (/(eat|food|steak|dinner|lunch|breakfast|restaurant|ramen|coffee|brunch|seafood|hungry)/.test(t)) kinds.push("eat");
-  if (/(bar|drink|cocktail|wine|night|rooftop|music|fado)/.test(t)) kinds.push("nightlife");
-  if (/(stay|hotel|sleep|room)/.test(t)) kinds.push("stay");
-  if (/(do|see|visit|museum|view|activity|walk|day trip|hike|surf|garden)/.test(t)) kinds.push("do");
-  if (/(get around|transport|tram|train|bike|transit)/.test(t)) kinds.push("move");
+  if (/\b(eat|food|steak|dinner|lunch|breakfast|restaurant|ramen|coffee|brunch|seafood|hungry|sushi|pizza|tapas|bakery|pastr|caf[eé])/.test(t)) kinds.push("eat");
+  if (/\b(bars?|drinks?|cocktail|wine|nightlife|night out|rooftop|music|fado|club|pub)/.test(t)) kinds.push("nightlife");
+  if (/\b(stay|hotels?|sleep|hostel|accommodation)/.test(t)) kinds.push("stay");
+  if (/\b(things to do|see|sights?|museums?|views?|viewpoint|activit|walk|day trip|hike|surf|gardens?|parks?|galler|histor|castle|palace|beach)/.test(t)) kinds.push("do");
+  if (/\b(get around|transport|tram|train|bikes?|transit|ferry)/.test(t)) kinds.push("move");
   return kinds;
+};
+
+const WORD_STOP = new Set(["days", "week", "weekend", "trip", "want", "great", "nothing", "touristy", "plan", "with", "some", "more", "like", "place", "places", "spot", "spots", "good", "best", "really", "find", "show", "near", "from", "that", "this", "there", "lover", "hates", "crowds", "long", "slow", "cozy"]);
+
+/** Specific things asked for ("steak", "sushi", "jazz") matched against place tags and cuisine. */
+const keywordsOf = (text: string): string[] =>
+  [...new Set(text.toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length >= 4 && !WORD_STOP.has(w)).map((w) => w.replace(/(es|s)$/, "")))].slice(0, 8);
+
+const mentions = (p: Place, words: string[]): boolean => {
+  if (!words.length) return false;
+  const hay = `${p.cuisine ?? ""} ${p.tags.join(" ")}`.toLowerCase();
+  return words.some((w) => w.length >= 4 && hay.includes(w));
+};
+
+interface Candidate {
+  place: Place;
+  score: number;
+  per: number[];
+}
+
+const KIND_QUOTA: Record<PlaceKind, number> = { eat: 8, do: 7, nightlife: 5, stay: 2, move: 2 };
+
+/**
+ * The shortlist the AI chooses from: what the message asks for (kinds and specific things like
+ * "steak") first, otherwise a balanced mix of the best fits per kind. Keeps big live cities manageable.
+ */
+const shortlist = (ranked: Candidate[], text: string, settings: TripSettings | undefined, size = 24): Candidate[] => {
+  const words = keywordsOf(text);
+  const asked = detectKinds(text);
+  const out: Candidate[] = [];
+  const push = (c: Candidate) => {
+    if (out.length < size && !out.some((x) => x.place.id === c.place.id)) out.push(c);
+  };
+  ranked.filter((c) => mentions(c.place, words)).slice(0, 10).forEach(push);
+  const kinds = asked.length ? asked : [...new Set((settings?.interests ?? []).flatMap((i) => INTEREST_BY_ID[i]?.kinds ?? []))];
+  if (kinds.length) ranked.filter((c) => kinds.includes(c.place.kind)).forEach(push);
+  if (!asked.length) {
+    (Object.keys(KIND_QUOTA) as PlaceKind[]).forEach((k) => ranked.filter((c) => c.place.kind === k).slice(0, KIND_QUOTA[k]).forEach(push));
+  }
+  ranked.forEach(push);
+  return out;
 };
 
 const detectLength = (text: string): number => {
@@ -124,7 +166,7 @@ const planPlacements = (trip: Trip, picks: Place[], userText: string, aiPlan: Ai
   const out: { place: Place; day: number; time: string }[] = [];
 
   for (const place of picks) {
-    if (place.city !== trip.city || inTrip.has(place.id)) continue;
+    if (!sameCity(place.city, trip.city) || inTrip.has(place.id)) continue;
     if (place.kind === "stay" && (hasStay || out.some((o) => o.place.kind === "stay"))) continue;
 
     let day: number;
@@ -183,18 +225,20 @@ const tripBrief = (trip: Trip | undefined): string => {
   return `This chat's trip: ${trip.city}, ${trip.startDate} to ${trip.endDate} (${trip.days.length} days)\n${days}`;
 };
 
-/** Local, deterministic concierge used when the AI is unreachable. */
-const localReply = (profile: TasteProfile, text: string, city: string, exclude: Set<string>, settings?: TripSettings): AiReply => {
-  const asked = detectKinds(text);
-  const kinds = asked.length ? asked : [...new Set((settings?.interests ?? []).flatMap((i) => INTEREST_BY_ID[i]?.kinds ?? []))];
-  const pool = PLACES.filter((p) => p.city === city && (kinds.length === 0 || kinds.includes(p.kind)) && !exclude.has(p.id));
-  const ranked = rankPlaces(profile, pool).slice(0, 3);
-  const label = blendLabel(profile.blend);
+/** Local, deterministic concierge used when the AI is unreachable: the best fits from the shortlist. */
+const localReply = (profile: TasteProfile, text: string, city: string, candidates: Candidate[], isGroup: boolean, people: number): AiReply => {
+  const kinds = detectKinds(text);
+  const words = keywordsOf(text);
+  const wanted = candidates.filter((c) => (!kinds.length || kinds.includes(c.place.kind)) && (!words.length || mentions(c.place, words) || !candidates.some((x) => mentions(x.place, words))));
+  const top = (wanted.length ? wanted : candidates).slice(0, 3);
+  const kind = kinds[0] ? `${KIND_LABEL[kinds[0]].toLowerCase()} ` : "";
   return {
-    reply: ranked.length
-      ? `As a ${label} blend, here are my top ${ranked.length} ${kinds[0] ? KIND_LABEL[kinds[0]].toLowerCase() : ""} picks in ${city}, ranked by how well they fit your Taste Profile.`
-      : `I couldn't find more ${city} spots that fit. Try asking for a different kind of place.`,
-    pickIds: ranked.map((r) => r.place.id),
+    reply: !top.length
+      ? `I couldn't find more ${city} spots that fit. Try asking for a different kind of place.`
+      : isGroup
+        ? `Here are the ${kind}picks that work best for all ${people} of you in ${city}, ranked by group score.`
+        : `As a ${blendLabel(profile.blend)} blend, here are my top ${top.length} ${kind}picks in ${city}, ranked by how well they fit your Taste Profile.`,
+    pickIds: top.map((c) => c.place.id),
     suggestions: ["Swap for something cozier", "Show rooftop bars", "More like this"],
   };
 };
@@ -203,8 +247,11 @@ export const [ConciergeProvider, useConcierge] = createContextHook(() => {
   const { profile } = useProfile();
   const { user } = useAuth();
   const { trips, tripById, createTrip, placeMany, removePlaces, upsertTrip, me } = useTrips();
+  const queryClient = useQueryClient();
   const [chats, setChats] = usePersistentState<ConciergeChat[]>("xp.chats.v1", []);
   const [activeId, setActiveId] = useState<string>(chats[0]?.id ?? "");
+  /** City whose places are loading for the first time, for the "Finding places in…" status. */
+  const [loadingCity, setLoadingCity] = useState<string | undefined>(undefined);
   const tripsRef = useRef<Trip[]>(trips);
   tripsRef.current = trips;
 
@@ -372,33 +419,77 @@ export const [ConciergeProvider, useConcierge] = createContextHook(() => {
   const mutation = useMutation({
     mutationFn: async (vars: { chatId: string; text: string; trip?: Trip; createdTrip: boolean; autoPlan: boolean; settings?: TripSettings; mates?: GroupMate[] }) => {
       const chat = chats.find((c) => c.id === vars.chatId);
-      const trip = vars.trip;
+      let trip = vars.trip;
+      let createdTrip = vars.createdTrip;
       const tuned = applyTripSettings(profile, vars.settings);
-      const city = findCity(vars.text) ?? trip?.city ?? "Lisbon";
+
+      // Which city: a hand-picked one named in the message, the chat's trip, or any city in the world.
+      let city = findCity(vars.text) ?? trip?.city;
+      let cityData: CityPlaces | undefined;
+      try {
+        if (!city) {
+          for (const guess of guessCities(vars.text)) {
+            setLoadingCity(guess);
+            try {
+              cityData = await queryClient.fetchQuery(cityPlacesQuery(guess));
+              city = cityData.city.name;
+              break;
+            } catch (e) {
+              console.info("[concierge] not a city we could load", guess, e instanceof Error ? e.message : e);
+            }
+          }
+        }
+        if (city && !cityData) {
+          if (!queryClient.getQueryData(cityPlacesQuery(city).queryKey)) setLoadingCity(city);
+          try {
+            cityData = await queryClient.fetchQuery(cityPlacesQuery(city));
+          } catch (e) {
+            console.warn("[concierge] live places unavailable, using hand-picked ones", e instanceof Error ? e.message : e);
+          }
+        }
+      } finally {
+        setLoadingCity(undefined);
+      }
+      city = city ?? "Lisbon";
+      const pool = cityData?.places ?? curatedFor(city);
+
+      // A brand-new city starts its own trip, with the real map position and cover photo.
+      if (!trip && vars.autoPlan && cityData && !CITIES.some((c) => sameCity(c.name, city ?? ""))) {
+        const start = detectStart(vars.text);
+        const end = new Date(start.getTime() + (detectLength(vars.text) - 1) * 86_400_000);
+        const info = cityData.city;
+        const made = createTrip(info.name, iso(start), iso(end), { country: info.country, center: info.center, cover: info.cover, blurb: info.blurb ?? undefined, located: true });
+        trip = made;
+        createdTrip = true;
+        updateChat(vars.chatId, (c) => ({
+          ...c,
+          tripId: made.id,
+          cover: made.cover,
+          title: c.titleLocked ? c.title : `${made.city}, ${shortRange(made.startDate, made.endDate)}`,
+        }));
+      }
+
       const already = new Set<string>();
       chat?.messages.slice(-4).forEach((m) => m.picks?.forEach((p) => already.add(p.id)));
-      const askingMore = /(more|other|else|different|swap|instead)/i.test(vars.text);
-      const planning = vars.autoPlan && trip?.city === city;
+      const askingMore = /\b(more|other|else|different|swap|instead)\b/i.test(vars.text);
+      const planning = Boolean(vars.autoPlan && trip && sameCity(trip.city, city));
+      const inTrip = new Set(trip?.days.flatMap((d) => d.items.map((x) => x.place.id)) ?? []);
 
       const mates = (vars.mates ?? []).map((m) => ({ name: m.name, profile: applyTripSettings(m.profile, vars.settings) }));
       const isGroup = mates.length > 0;
-      const pool = PLACES.filter((p) => p.city === city);
-      const candidates = isGroup
-        ? pool
-            .map((place) => {
-              const per = [scorePlace(tuned, place).score, ...mates.map((m) => scorePlace(m.profile, place).score)];
-              return { place, match: { score: groupScore(per) }, per };
-            })
-            .sort((a, b) => b.match.score - a.match.score)
-            .slice(0, 24)
-        : rankPlaces(tuned, pool)
-            .slice(0, 24)
-            .map((r) => ({ ...r, per: [r.match.score] }));
+      const ranked: Candidate[] = pool
+        .filter((p) => !inTrip.has(p.id) && !(askingMore && already.has(p.id)))
+        .map((place) => {
+          const per = [scorePlace(tuned, place).score, ...mates.map((m) => scorePlace(m.profile, place).score)];
+          return { place, per, score: isGroup ? groupScore(per) : per[0] };
+        })
+        .sort((a, b) => b.score - a.score);
+      const candidates = shortlist(ranked, vars.text, vars.settings);
       const names = [profile.name, ...mates.map((m) => m.name)];
       const catalog = candidates
         .map(
-          ({ place, match, per }) =>
-            `${place.id} | ${place.name} | ${KIND_LABEL[place.kind]}${place.cuisine ? ` (${place.cuisine})` : ""} | ${place.neighborhood} | ${"$".repeat(place.price)} | ${isGroup ? `group ${match.score}% (${per.map((s, i) => `${names[i]} ${s}`).join(", ")})` : `match ${match.score}%`} | tags: ${place.tags.join(", ")} | ${place.blurb}`,
+          ({ place, score, per }) =>
+            `${place.id} | ${place.name} | ${KIND_LABEL[place.kind]}${place.cuisine ? ` (${place.cuisine})` : ""} | ${place.neighborhood || "—"} | ${"$".repeat(place.price)} | ${isGroup ? `group ${score}% (${per.map((s, i) => `${names[i]} ${s}`).join(", ")})` : `match ${score}%`} | ${place.source === "osm" ? "live" : "curated"} | tags: ${place.tags.join(", ")} | ${place.blurb}`,
         )
         .join("\n");
       const groupBrief = isGroup
@@ -410,16 +501,17 @@ export const [ConciergeProvider, useConcierge] = createContextHook(() => {
 ${profileBrief(profile)}${groupBrief}
 ${settingsBrief(vars.settings)}
 
-${tripBrief(trip)}${vars.createdTrip ? "\n(This trip was just created from this message. Briefly mention you started the itinerary.)" : ""}
+${tripBrief(trip)}${createdTrip ? "\n(This trip was just created from this message. Briefly mention you started the itinerary.)" : ""}
 
-Candidate places in ${city}, pre-ranked by our match engine:
-${catalog}
+Candidate places in ${city}, pre-ranked by our match engine ("curated" = hand-checked by XP Match, "live" = from OpenStreetMap with short factual descriptions):
+${catalog || "(none available right now)"}
 
 Rules:
 - Reply ONLY with a JSON object: {"reply": string, "pickIds": string[], "plan": [{"id": string, "day": number, "time": "HH:MM"}], "suggestions": string[]}.
 - "reply": 1-3 short, friendly sentences. Reference their blend or tastes naturally (e.g. "As a Curator-Drifter..."). No markdown, no lists, never list the picks by name in the reply because they render as cards.
 - "pickIds": 0-3 ids chosen ONLY from the candidate list that best answer the request. Prefer higher match % unless the request says otherwise. When the request is open-ended, lean into the trip's focus. ${askingMore ? `Avoid these recently shown ids: ${[...already].join(", ") || "none"}.` : ""}
 - "plan": ${planning ? "for each pick, the 1-based trip day and a sensible local time that fits around what's already planned (meals at meal times, sunsets late afternoon, bars late). Don't double-book a time slot. Spread picks across days that are light and never exceed the pace limit per day." : "return an empty array."}
+- For "live" places, only state what the listing says (type, cuisine, neighborhood). Never invent dishes, awards, history or reviews for them.
 - If the user asks a general question (weather, tips, logistics), answer it and return empty pickIds and plan.
 - "suggestions": exactly 3 short follow-up prompts (max 5 words each) the user might tap next.`;
 
@@ -439,35 +531,27 @@ Rules:
         if (typeof result.reply !== "string") throw new Error("bad reply");
       } catch (e) {
         console.warn("[concierge] AI unavailable, using local matcher", e instanceof Error ? e.message : e);
-        result = localReply(tuned, vars.text, city, askingMore ? already : new Set(), vars.settings);
-        if (isGroup) {
-          const ids = new Set(candidates.map((c) => c.place.id));
-          const kinds = detectKinds(vars.text);
-          result.pickIds = candidates
-            .filter((c) => ids.has(c.place.id) && (!kinds.length || kinds.includes(c.place.kind)) && !(askingMore && already.has(c.place.id)))
-            .slice(0, 3)
-            .map((c) => c.place.id);
-          result.reply = `Here are the picks that work best for all ${names.length} of you, ranked by group score.`;
-        }
+        result = localReply(tuned, vars.text, city, candidates, isGroup, names.length);
       }
-      const picks = (result.pickIds ?? []).map((id) => PLACE_BY_ID[id]).filter((p): p is Place => Boolean(p) && p.city === city).slice(0, 3);
-      return { vars, result, picks, planning };
+      const byId = new Map(pool.map((p) => [p.id, p]));
+      const picks = (result.pickIds ?? []).map((id) => byId.get(id)).filter((p): p is Place => Boolean(p)).slice(0, 3);
+      return { vars, result, picks, planning, trip, createdTrip };
     },
-    onSuccess: ({ vars, result, picks, planning }) => {
+    onSuccess: ({ vars, result, picks, planning, trip: usedTrip, createdTrip }) => {
       let planned: PlannedUpdate | undefined;
-      const trip = vars.trip ? (tripsRef.current.find((t) => t.id === vars.trip?.id) ?? vars.trip) : undefined;
+      const trip = usedTrip ? (tripsRef.current.find((t) => t.id === usedTrip.id) ?? usedTrip) : undefined;
       if (planning && trip && picks.length) {
         const placements = planPlacements(trip, picks, vars.text, Array.isArray(result.plan) ? result.plan : undefined, paceCap(vars.settings?.pace));
         if (placements.length) {
           placeMany(trip.id, placements, XP_AUTHOR);
           planned = {
             tripId: trip.id,
-            created: vars.createdTrip,
+            created: createdTrip,
             items: placements.map((p) => ({ placeId: p.place.id, name: p.place.name, day: p.day + 1, time: p.time })),
           };
         }
       }
-      if (!planned && vars.createdTrip && vars.trip) planned = { tripId: vars.trip.id, created: true, items: [] };
+      if (!planned && createdTrip && trip) planned = { tripId: trip.id, created: true, items: [] };
       const msg: ChatPickMessage = {
         id: uid("m"),
         role: "assistant",
@@ -573,6 +657,7 @@ Rules:
     send,
     sendToGroup,
     isThinking: mutation.isPending,
+    loadingCity,
     pendingChatId: mutation.isPending ? mutation.variables?.chatId : undefined,
   };
 });

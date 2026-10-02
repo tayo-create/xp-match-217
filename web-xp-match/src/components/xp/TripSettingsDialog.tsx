@@ -15,7 +15,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PersonAvatar } from "@/components/xp/PersonAvatar";
 import { DEFAULT_SETTINGS, INTERESTS, PACES, applyTripSettings } from "@/data/interests";
-import { PLACES } from "@/data/places";
+import { useCityPlaces } from "@/hooks/use-city-places";
 import { rankPlaces } from "@/lib/match";
 import { cn } from "@/lib/utils";
 import type { ConciergeChat, InterestId, TripPace, TripSettings } from "@/lib/types";
@@ -46,7 +46,8 @@ export function TripSettingsDialog({ chat, open, onOpenChange }: Props) {
     setDraft((d) => ({ ...d, interests: d.interests.includes(id) ? d.interests.filter((x) => x !== id) : [...d.interests, id].slice(-4) }));
 
   const city = trip?.city ?? "Lisbon";
-  const preview = useMemo(() => rankPlaces(applyTripSettings(profile, draft), PLACES.filter((p) => p.city === city)).slice(0, 3), [profile, draft, city]);
+  const { places: cityPlaces } = useCityPlaces(open ? city : undefined);
+  const preview = useMemo(() => rankPlaces(applyTripSettings(profile, draft), cityPlaces).slice(0, 3), [profile, draft, cityPlaces]);
 
   const save = () => {
     setSettings(chat.id, draft);

@@ -6,7 +6,8 @@ import { AddToTripButton } from "@/components/xp/AddToTrip";
 import { PersonAvatar } from "@/components/xp/PersonAvatar";
 import { TwinBars, WhyBadge } from "@/components/xp/ScoreBreakdown";
 import { INTEREST_BY_ID } from "@/data/interests";
-import { CITIES, KIND_LABEL, PLACES, placeImage, priceLabel } from "@/data/places";
+import { CITIES, KIND_LABEL, placeImage, priceLabel } from "@/data/places";
+import { useCityPlaces } from "@/hooks/use-city-places";
 import { type PlaceScores, type TripPerson, scoreForPeople, useTripPeople } from "@/hooks/use-trip-people";
 import { firstName } from "@/lib/sharedProfile";
 import { cn } from "@/lib/utils";
@@ -45,7 +46,8 @@ export default function Discover() {
   const city = trip?.city ?? CITIES[0].name;
   const inTrip = useMemo(() => new Set(trip?.days.flatMap((d) => d.items.map((x) => x.place.id)) ?? []), [trip]);
 
-  const scored = useMemo(() => PLACES.filter((p) => p.city === city).map((place) => ({ place, scores: scoreForPeople(people, place) })), [people, city]);
+  const { places: cityPlaces, isLoading: placesLoading, liveCount } = useCityPlaces(city, trip);
+  const scored = useMemo(() => cityPlaces.map((place) => ({ place, scores: scoreForPeople(people, place) })), [people, cityPlaces]);
 
   const ranked = useMemo<Ranked[]>(
     () => scored.map((s) => ({ ...s, value: valueFor(s.scores, active) })).sort((a, b) => b.value - a.value),
@@ -59,7 +61,8 @@ export default function Discover() {
     const focused = interestKinds.size ? pool.filter((r) => interestKinds.has(r.place.kind)) : pool;
     return (focused.length >= 4 ? focused : pool).slice(0, 8);
   }, [ranked, inTrip, podium, interestKinds]);
-  const explore = useMemo(() => ranked.filter((r) => kind === "all" || r.place.kind === kind), [ranked, kind]);
+  // Big live cities have hundreds of places; the ranked list shows the best 60 per filter.
+  const explore = useMemo(() => ranked.filter((r) => kind === "all" || r.place.kind === kind).slice(0, 60), [ranked, kind]);
   const disagreements = useMemo(() => (isGroup ? [...scored].sort((a, b) => b.scores.spread - a.scores.spread).filter((s) => s.scores.spread >= 30).slice(0, 3) : []), [scored, isGroup]);
 
   const summary = useMemo(() => {
@@ -117,7 +120,7 @@ export default function Discover() {
             ) : null}
           </div>
           <p className="mt-2 text-foreground/70">
-            {formatRange(trip.startDate, trip.endDate)} · ranked {isGroup ? `for ${people.map((p) => (p.isMe ? "you" : firstName(p.name))).join(", ")}` : "for your taste"}
+            {formatRange(trip.startDate, trip.endDate)} · {placesLoading ? "finding live places…" : `${scored.length} places${liveCount ? " incl. live listings" : ""}`} · ranked {isGroup ? `for ${people.map((p) => (p.isMe ? "you" : firstName(p.name))).join(", ")}` : "for your taste"}
           </p>
         </div>
         {isGroup ? (

@@ -125,7 +125,7 @@ function NewTripDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
                 <option key={c.name} value={c.name} />
               ))}
             </datalist>
-            <span className="mt-1 block text-xs text-muted-foreground">Curated picks available for {CITIES.map((c) => c.name).join(", ")}.</span>
+            <span className="mt-1 block text-xs text-muted-foreground">Any city in the world. Hand-picked guides for {CITIES.map((c) => c.name).join(", ")}.</span>
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">

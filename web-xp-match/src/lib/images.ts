@@ -30,4 +30,13 @@ export const IMG = {
   arjun: `${base}/83916c74-d734-4a06-bed5-d9955c33f54f.png`,
   lena: `${base}/9e0cf6a9-c72d-4d8f-9c98-4e6559b84591.png`,
   tom: `${base}/a13528c8-ef8f-4b17-8476-de2513592e10.png`,
+  genRestaurant: `${base}/f431a5dc-ffd9-4f30-af67-5688ab23104c.png`,
+  genCafe: `${base}/42baf314-f904-4b85-9041-f11988b24e7b.png`,
+  genBar: `${base}/88c12d07-5ee9-43b4-b7ae-aa3bb23b5151.png`,
+  genMuseum: `${base}/8e0511d8-e885-4c23-a8ba-f1eff324b62b.png`,
+  genPark: `${base}/b418d8bc-1343-4e0b-8c39-448048800d23.png`,
+  genLandmark: `${base}/d099c5d8-ffcc-4e36-a9cb-368780d69e00.png`,
+  genStation: `${base}/66e989f5-aafe-435a-9cd2-8b3fdc356f8a.png`,
+  genMarket: `${base}/388cac9f-08b9-4074-a8dd-af60b38cff92.png`,
+  genCity: `${base}/c9bc5a44-aa82-4246-a2a2-70dcc1e698a9.png`,
 } as const;

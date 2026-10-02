@@ -1,8 +1,9 @@
-import { ArrowLeftRight, MapPin } from "lucide-react";
+import { ArrowLeftRight, Loader2, MapPin } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { KIND_LABEL, placeImage, priceLabel } from "@/data/places";
+import { useCityPlaces } from "@/hooks/use-city-places";
 import { scoreForPeople, type TripPerson } from "@/hooks/use-trip-people";
 import { cn } from "@/lib/utils";
 import type { ItineraryItem, Place, Trip } from "@/lib/types";
@@ -23,9 +24,10 @@ interface Props {
 export function SwapList({ trip, item, day, people, onSwapped, onAsk }: Props) {
   const { replaceItem } = useTrips();
   const [more, setMore] = useState<boolean>(false);
-  const options = useMemo(() => swapOptions(trip, item, people, 6), [trip, item, people]);
+  const { places, isLoading, error, retry } = useCityPlaces(trip.city, trip);
+  const options = useMemo(() => swapOptions(trip, item, people, places, 12), [trip, item, people, places]);
   const current = useMemo(() => scoreForPeople(people, item.place).group, [people, item.place]);
-  const shown = more ? options : options.slice(0, 3);
+  const shown = more ? options : options.slice(0, 4);
   const kind = KIND_LABEL[item.place.kind].toLowerCase();
 
   const swap = (place: Place) => {
@@ -43,9 +45,18 @@ export function SwapList({ trip, item, day, people, onSwapped, onAsk }: Props) {
       <p className="px-1 pb-2 text-[12px] font-semibold text-foreground/70">
         Swap for another {kind} spot <span className="font-normal text-muted-foreground">· current fit {current}%</span>
       </p>
-      {shown.length === 0 ? (
+      {shown.length === 0 && isLoading ? (
+        <p className="flex items-center gap-2 px-1 pb-1 text-[13px] text-muted-foreground" role="status">
+          <Loader2 className="size-3.5 animate-spin" /> Finding {kind} spots around {trip.city}…
+        </p>
+      ) : shown.length === 0 ? (
         <div className="px-1 pb-1 text-[13px] text-muted-foreground">
-          No other {kind} spots in {trip.city} in our picks yet.
+          {error ? "Couldn't reach live places right now." : `No other ${kind} spots nearby.`}
+          {error ? (
+            <button type="button" onClick={retry} className="ml-1 font-semibold text-primary hover:underline">
+              Try again
+            </button>
+          ) : null}
           {onAsk ? (
             <button type="button" onClick={() => onAsk(`Find me a different ${kind} option instead of ${item.place.name} on day ${day + 1}`)} className="ml-1 font-semibold text-primary hover:underline">
               Ask XP
@@ -83,9 +94,9 @@ export function SwapList({ trip, item, day, people, onSwapped, onAsk }: Props) {
           })}
         </ul>
       )}
-      {options.length > 3 ? (
+      {options.length > 4 ? (
         <button type="button" onClick={() => setMore((v) => !v)} className="mt-1.5 w-full rounded-md py-1 text-[12px] font-semibold text-secondary/80 hover:bg-card">
-          {more ? "Fewer options" : `${options.length - 3} more options`}
+          {more ? "Fewer options" : `${options.length - 4} more options`}
         </button>
       ) : null}
     </div>

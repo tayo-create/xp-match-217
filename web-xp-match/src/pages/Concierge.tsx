@@ -325,6 +325,7 @@ function PlannedReceipt({ chatId, msg, controls }: { chatId: string; msg: ChatPi
 function ChatThread({ chat, onSend, thinking, controls }: { chat?: ConciergeChat; onSend: (t: string, toGroup?: boolean) => void; thinking: boolean; controls: PanelControls }) {
   const { profile } = useProfile();
   const { tripById, me } = useTrips();
+  const { loadingCity } = useConcierge();
   const people = useTripPeople(chat);
   const isGroup = Boolean(chat?.roomId) && people.length > 1;
   const [toGroup, setToGroup] = useState<boolean>(false);
@@ -375,7 +376,7 @@ function ChatThread({ chat, onSend, thinking, controls }: { chat?: ConciergeChat
                 </button>
               ))}
             </div>
-            <p className="mt-6 text-sm text-muted-foreground">Curated picks for {CITIES.map((c) => c.name).join(", ")}.</p>
+            <p className="mt-6 text-sm text-muted-foreground">Any city works. Hand-picked guides for {CITIES.map((c) => c.name).join(", ")}, live places everywhere else.</p>
           </div>
         ) : null}
 
@@ -451,7 +452,7 @@ function ChatThread({ chat, onSend, thinking, controls }: { chat?: ConciergeChat
               {[0, 1, 2].map((i) => (
                 <span key={i} className="typing-dot size-2 rounded-full bg-foreground/50" style={{ animationDelay: `${i * 0.15}s` }} />
               ))}
-              <span className="ml-2 text-sm text-muted-foreground">{chat?.autoPlan !== false ? "Matching picks and planning your days…" : "Matching to your taste…"}</span>
+              <span className="ml-2 text-sm text-muted-foreground">{loadingCity ? `Finding places in ${loadingCity}…` : chat?.autoPlan !== false ? "Matching picks and planning your days…" : "Matching to your taste…"}</span>
             </div>
           </div>
         ) : null}

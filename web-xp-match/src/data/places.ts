@@ -638,6 +638,19 @@ const KIND_FALLBACK: Record<PlaceKind, string> = {
   move: IMG.tram,
 };
 
-export const placeImage = (p: Place): string => p.image ?? KIND_FALLBACK[p.kind];
+/** Neutral photos for live places by category, so a Berlin café never shows a Lisbon tram. */
+const CAT_IMAGE: Record<string, string> = {
+  restaurant: IMG.genRestaurant,
+  cafe: IMG.genCafe,
+  bar: IMG.genBar,
+  museum: IMG.genMuseum,
+  park: IMG.genPark,
+  landmark: IMG.genLandmark,
+  station: IMG.genStation,
+  market: IMG.genMarket,
+  hotel: IMG.hotel,
+};
+
+export const placeImage = (p: Place): string => p.image ?? (p.cat ? CAT_IMAGE[p.cat] : undefined) ?? KIND_FALLBACK[p.kind];
 
 export const priceLabel = (price: number): string => (price <= 1 ? "$" : "$".repeat(Math.min(price, 4)));

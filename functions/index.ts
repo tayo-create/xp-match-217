@@ -5,10 +5,12 @@ export { Directory } from "./directory";
 export { Feed } from "./feed";
 export { Feedback } from "./feedback";
 export { Inbox } from "./inbox";
+export { PlaceCache } from "./places";
 export { SharedTrip } from "./shared-trip";
 export { TripRoom } from "./trip-room";
 export { UserStore } from "./user-store";
 
+import { citySlug } from "./places";
 import { json, randomToken, readBody, str } from "./storage";
 
 type Env = { DO: Fetcher };
@@ -102,6 +104,13 @@ export default {
 
     try {
       if (url.pathname === "/ping") return json({ ok: true, now: new Date().toISOString() });
+
+      // City lookup (location, cover, intro) for live places, cached per city name.
+      if (parts[0] === "places" && parts[1] === "city" && parts.length === 2 && (m === "GET" || m === "PUT")) {
+        const q = str(url.searchParams.get("q"), 80);
+        if (q.length < 2) return json({ error: "Which city?" }, 400);
+        return dispatch(request, env, "PlaceCache", citySlug(q));
+      }
 
       if (parts[0] === "sync" && parts.length === 1) {
         const userId = request.headers.get("X-Rork-User-Id");

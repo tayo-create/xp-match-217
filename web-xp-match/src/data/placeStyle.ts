@@ -76,6 +76,7 @@ const PRICE_TO_SPLURGE = [10, 15, 45, 75, 95];
 export const placeStyle = (place: Place): PlaceStyle => {
   const known = TABLE[place.id];
   if (known) return known;
+  if (place.levels && place.dials) return { levels: place.levels, dials: place.dials };
   const levels = Object.fromEntries(place.tags.map((t) => [t, 0.65]));
   const tags = new Set(place.tags);
   return {

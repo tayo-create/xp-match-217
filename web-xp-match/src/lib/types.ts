@@ -43,6 +43,16 @@ export interface Place {
   lng: number;
   image?: string;
   custom?: boolean;
+  /** "osm" for live places from OpenStreetMap; absent for hand-picked catalog places. */
+  source?: "osm";
+  /** Live places carry their own scoring data (interest levels 0–1 and style dials). */
+  levels?: Record<string, number>;
+  dials?: StyleDials;
+  /** Photo category for live places without their own photo (restaurant, cafe, bar, museum…). */
+  cat?: string;
+  website?: string;
+  hours?: string;
+  wikidata?: string;
 }
 
 export interface MatchResult {
@@ -104,6 +114,8 @@ export interface Trip {
   blurb: string;
   center: [number, number];
   days: TripDay[];
+  /** Set once a trip to a new city has its real map position, cover and country. */
+  located?: boolean;
 }
 
 export interface ChatPickMessage {

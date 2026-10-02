@@ -34,14 +34,14 @@ interface Props {
 
 /** A place opened from the chat or the map: why it fits, where it sits on the trip, and actions. */
 export function PlaceDetail({ place, trip, stop, people, backLabel, onBack, onAsk, onSwapped }: Props) {
-  const { removeItem, addToTrip, isSaved, toggleSaved } = useTrips();
+  const { removeItem, addToTrip } = useTrips();
   const { stats } = useReviews();
-  const { openRate, logFor } = useList();
+  const { openRate, logFor, isWant, toggleWant } = useList();
   const [swapping, setSwapping] = useState<boolean>(false);
   const scores = useMemo(() => scoreForPeople(people, place), [people, place]);
   const solo = scores.per.length === 1 ? scores.per[0].score : undefined;
   const s = stats(place.id);
-  const saved = isSaved(place.id);
+  const saved = isWant(place.id);
   const mine = logFor(place.id);
   const booking = bookingLinkFor(place);
 
@@ -152,6 +152,17 @@ export function PlaceDetail({ place, trip, stop, people, backLabel, onBack, onAs
       </div>
 
       <p className="mt-4 text-[14px] leading-relaxed text-foreground/80">{place.blurb}</p>
+      {place.source === "osm" ? (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+          {place.hours ? <span>Hours: {place.hours.replace(/;/g, " · ")}</span> : null}
+          {place.website ? (
+            <a href={place.website} target="_blank" rel="noopener noreferrer" className="font-semibold text-secondary underline-offset-2 hover:underline">
+              Website
+            </a>
+          ) : null}
+          <span>Live listing from OpenStreetMap</span>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid grid-cols-2 gap-2">
         <a href={booking.url} target="_blank" rel="noopener noreferrer" className="press inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-secondary text-[13px] font-semibold text-secondary-foreground hover:bg-secondary/90">
@@ -167,7 +178,7 @@ export function PlaceDetail({ place, trip, stop, people, backLabel, onBack, onAs
         </a>
         <button
           type="button"
-          onClick={() => toggleSaved(place.id)}
+          onClick={() => toggleWant(place)}
           aria-pressed={saved}
           className={cn("press inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border text-[13px] font-semibold", saved ? "border-primary/40 bg-accent text-primary" : "border-border bg-card hover:bg-muted")}
         >
