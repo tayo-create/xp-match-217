@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CompatBadge } from "@/components/xp/CompatBadge";
+import { AddToTripButton } from "@/components/xp/AddToTrip";
 import { type CityOption, type FeedLocation, FeedLocationFilter, locationLabel } from "@/components/xp/FeedLocationFilter";
 import { PersonAvatar } from "@/components/xp/PersonAvatar";
 import { ReportDialog } from "@/components/xp/ReportDialog";
@@ -318,6 +319,7 @@ function LikeButton({ post }: { post: FeedPost }) {
 
 const LogPost = memo(function LogPost({ post, index }: { post: FeedPost; index: number }) {
   const { profile } = useProfile();
+  const { user } = useAuth();
   const { isWant, toggleWant, openRate, logFor } = useList();
   const place = useMemo(() => (post.place ? placeFromSnap(post.place) : undefined), [post.place]);
   if (!place || !post.tier) return null;
@@ -383,6 +385,7 @@ const LogPost = memo(function LogPost({ post, index }: { post: FeedPost; index: 
         <button type="button" onClick={() => toggleWant(place)} aria-pressed={isWant(place.id)} className={cn("press inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold", isWant(place.id) ? "text-primary" : "text-foreground/65 hover:bg-muted")}>
           <Bookmark className={cn("size-[18px]", isWant(place.id) && "fill-primary")} /> {isWant(place.id) ? "Saved" : "Want to go"}
         </button>
+        {user ? <AddToTripButton place={place} size="sm" className="flex-none" /> : null}
         <button type="button" onClick={() => openRate(place)} className="press inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-foreground/65 hover:bg-muted">
           <Star className="size-[18px]" /> {mine ? `You: ${mine.score.toFixed(1)}` : "Been? Rate it"}
         </button>
